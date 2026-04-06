@@ -1,0 +1,16 @@
+[Unit]
+Description=Habit API
+After=network.target
+
+[Service]
+Type=simple
+User=admin
+WorkingDirectory=/home/admin/habit-api
+ExecStart=/usr/bin/node index.js
+Restart=always
+RestartSec=5
+StandardOutput=append:/home/admin/habit-api/app.log
+StandardError=append:/home/admin/habit-api/app.log
+
+[Install]
+WantedBy=multi-user.target

@@ -3,10 +3,24 @@ const sqlite3 = require('sqlite3').verbose();
 const cors = require('@fastify/cors');
 const formbody = require('@fastify/formbody');
 const path = require('path');
-const { exec } = require('child_process');
+const fs = require('fs');
+const ical = require('node-ical');
 
 const PORT = 5175;
 const dbPath = path.resolve(__dirname, 'habits.db');
+const versionPath = path.resolve(__dirname, 'VERSION');
+
+const CALENDAR_URLS = [
+  'https://p150-caldav.icloud.com/published/2/MjgxODg0Njg3MjgxODg0NpJ02PdAyaLseFiqKNvbhLrtLrffWjKvB2lI28L7RunWI2o3Zy2rwLfu1bjVbbKMYqHRe_fio1SIn3BmwiLfbqw',
+  'https://p150-caldav.icloud.com/published/2/MjgxODg0Njg3MjgxODg0NpJ02PdAyaLseFiqKNvbhLpfXZShQbYGx6RMlCr5pQ7TF8AShdhnSoIJwHnTx1ioGjjR5b3jVKpuPRR_oD0CKjk',
+];
+
+let APP_VERSION = 'unknown';
+try {
+  APP_VERSION = fs.readFileSync(versionPath, 'utf8').trim();
+} catch (e) {
+  console.error('Could not read VERSION file');
+}
 
 // Register Plugins
 fastify.register(cors, { origin: true, methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'] });
@@ -25,6 +39,16 @@ db.serialize(() => {
     active INTEGER DEFAULT 1,
     history TEXT DEFAULT '[]'
   )`);
+});
+
+// GET health
+fastify.get('/health', async (request, reply) => {
+  return { status: 'healthy', timestamp: new Date().toISOString() };
+});
+
+// GET version
+fastify.get('/version', async (request, reply) => {
+  return { version: APP_VERSION };
 });
 
 // GET all habits
@@ -96,23 +120,41 @@ fastify.patch('/habits/:id', async (request, reply) => {
   });
 });
 
-// GET calendar events using Swift binary
+// GET calendar events from iCloud webcal feeds
 fastify.get('/calendar', async (request, reply) => {
-  const binaryPath = path.resolve(__dirname, 'fetch_events');
-  return new Promise((resolve, reject) => {
-    exec(binaryPath, (error, stdout, stderr) => {
-      if (error) {
-        fastify.log.error(`Swift execution error: ${error.message}`);
-        return resolve([]); // Return empty rather than crashing
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+
+  const allEvents = [];
+
+  for (const url of CALENDAR_URLS) {
+    try {
+      const data = await ical.async.fromURL(url);
+
+      // Extract calendar name from VCALENDAR object
+      const calMeta = Object.values(data).find(v => v.type === 'VCALENDAR');
+      const calName = calMeta?.['WR-CALNAME'] || calMeta?.['x-wr-calname'] || 'Calendar';
+
+      for (const event of Object.values(data)) {
+        if (event.type !== 'VEVENT') continue;
+        const start = event.start instanceof Date ? event.start : new Date(event.start);
+        if (isNaN(start.getTime())) continue;
+        if (start >= todayStart && start < todayEnd) {
+          allEvents.push({
+            title: event.summary || 'Untitled',
+            start: start.toISOString(),
+            calendar: calName,
+          });
+        }
       }
-      try {
-        resolve(JSON.parse(stdout));
-      } catch (e) {
-        fastify.log.error(`JSON parse error: ${e.message}`);
-        resolve([]);
-      }
-    });
-  });
+    } catch (e) {
+      fastify.log.error(`Calendar fetch error for ${url}: ${e.message}`);
+    }
+  }
+
+  allEvents.sort((a, b) => new Date(a.start) - new Date(b.start));
+  return allEvents;
 });
 
 // GET weather from Open-Meteo

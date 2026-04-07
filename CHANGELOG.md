@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.2.0] - 2026-04-07
+### Changed
+- Removed weather endpoint (dashboard now calls Open-Meteo directly)
+
 ## [1.1.0] - 2026-04-06
 ### Changed
 - Replaced Swift binary calendar fetching with iCal parsing via `node-ical`

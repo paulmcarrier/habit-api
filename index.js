@@ -157,25 +157,6 @@ fastify.get('/calendar', async (request, reply) => {
   return allEvents;
 });
 
-// GET weather from Open-Meteo
-fastify.get('/weather', async (request, reply) => {
-  const { lat = 45.523062, lon = -122.676482 } = request.query; // Default to Portland, OR
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`;
-  
-  try {
-    const response = await fetch(url);
-    const data = await response.json();
-    return {
-      temp: data.current_weather.temperature,
-      condition: data.current_weather.weathercode,
-      windspeed: data.current_weather.windspeed
-    };
-  } catch (err) {
-    fastify.log.error(`Weather fetch error: ${err.message}`);
-    return reply.code(500).send({ error: 'Failed to fetch weather' });
-  }
-});
-
 const start = async () => {
   try {
     await fastify.listen({ port: PORT, host: '0.0.0.0' });

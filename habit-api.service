@@ -4,13 +4,13 @@ After=network.target
 
 [Service]
 Type=simple
-User=admin
-WorkingDirectory=/home/admin/habit-api
-ExecStart=/usr/bin/node index.js
+User=agentp
+WorkingDirectory=/home/agentp/habit-api
+ExecStart=/home/agentp/.nvm/versions/node/v20.20.2/bin/node index.js
 Restart=always
 RestartSec=5
-StandardOutput=append:/home/admin/habit-api/app.log
-StandardError=append:/home/admin/habit-api/app.log
+StandardOutput=append:/home/agentp/habit-api/app.log
+StandardError=append:/home/agentp/habit-api/app.log
 
 [Install]
 WantedBy=multi-user.target

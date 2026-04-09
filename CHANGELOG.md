@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.2.6] - 2026-04-09
+### Added
+- `/karpathy-feed` endpoint: scrapes @karpathy tweets via Twitter/X internal GraphQL API using session cookies; bearer token fetched dynamically from Twitter's JS bundle
+- `/threads-feed` endpoint: scrapes @karpathy posts from Threads.net via internal GraphQL API using session cookies
+- `/claude-quota` endpoint: probes Anthropic `count_tokens` to surface rate-limit headers
+- `twitter-scraper.js`, `threads-scraper.js`: scraper modules with 1h in-memory cache
+- `dotenv` support — secrets loaded from `.env` file (`ANTHROPIC_API_KEY`, `X_AUTH_TOKEN`, `X_CT0`, `X_THREADS_SESSION`, `X_THREADS_CSRF`)
+
+### Fixed
+- Threads scraper: corrected profile URL from `threads.net` to `threads.com`
+
 ## [1.2.0] - 2026-04-07
 ### Changed
 - Removed weather endpoint (dashboard now calls Open-Meteo directly)

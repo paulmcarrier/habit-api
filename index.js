@@ -1,7 +1,10 @@
+require('dotenv').config();
 const fastify = require('fastify')({ logger: true });
 const sqlite3 = require('sqlite3').verbose();
 const cors = require('@fastify/cors');
 const formbody = require('@fastify/formbody');
+const { fetchKarpathyTweets } = require('./twitter-scraper');
+const { fetchKarpathyThreads } = require('./threads-scraper');
 const path = require('path');
 const fs = require('fs');
 
@@ -112,6 +115,82 @@ fastify.patch('/habits/:id', async (request, reply) => {
       resolve({ success: true });
     });
   });
+});
+
+// GET karpathy feed (cached 1h)
+const karpathyCache = { data: null, fetchedAt: 0 };
+const CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
+fastify.get('/karpathy-feed', async (request, reply) => {
+  const authToken = process.env.X_AUTH_TOKEN;
+  const ct0 = process.env.X_CT0;
+  if (!authToken || !ct0) {
+    reply.code(503);
+    return { error: 'X_AUTH_TOKEN or X_CT0 not set' };
+  }
+
+  const now = Date.now();
+  if (karpathyCache.data && now - karpathyCache.fetchedAt < CACHE_TTL) {
+    return karpathyCache.data;
+  }
+
+  const tweets = await fetchKarpathyTweets(authToken, ct0);
+  karpathyCache.data = tweets;
+  karpathyCache.fetchedAt = now;
+  return tweets;
+});
+
+// GET karpathy threads (cached 1h)
+const threadsCache = { data: null, fetchedAt: 0 };
+
+fastify.get('/threads-feed', async (request, reply) => {
+  const sessionId = process.env.X_THREADS_SESSION;
+  const csrfToken = process.env.X_THREADS_CSRF;
+  if (!sessionId || !csrfToken) {
+    reply.code(503);
+    return { error: 'X_THREADS_SESSION or X_THREADS_CSRF not set' };
+  }
+
+  const now = Date.now();
+  if (threadsCache.data && now - threadsCache.fetchedAt < CACHE_TTL) {
+    return threadsCache.data;
+  }
+
+  const posts = await fetchKarpathyThreads(sessionId, csrfToken);
+  threadsCache.data = posts;
+  threadsCache.fetchedAt = now;
+  return posts;
+});
+
+// GET claude quota (rate limits via count_tokens probe)
+fastify.get('/claude-quota', async (request, reply) => {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    reply.code(503);
+    return { error: 'ANTHROPIC_API_KEY not set' };
+  }
+
+  const res = await fetch('https://api.anthropic.com/v1/messages/count_tokens', {
+    method: 'POST',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      messages: [{ role: 'user', content: 'hi' }]
+    })
+  });
+
+  const quota = {};
+  for (const [key, value] of res.headers.entries()) {
+    if (key.startsWith('anthropic-ratelimit')) {
+      quota[key] = value;
+    }
+  }
+
+  return quota;
 });
 
 const start = async () => {
